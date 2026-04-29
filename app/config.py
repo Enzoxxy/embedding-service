@@ -2,11 +2,16 @@ from functools import lru_cache
 from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
 
     model_name: str = "qwen3-embedding-8b"
     model_path: str = "models/Qwen3-Embedding-8B"
@@ -15,7 +20,7 @@ class Settings(BaseSettings):
     max_input_items: Annotated[int, Field(ge=1)] = 256
     request_timeout_seconds: Annotated[float, Field(gt=0)] = 120
     retry_attempts: Annotated[int, Field(ge=1, le=5)] = 2
-    api_keys: list[str] = Field(default_factory=list)
+    api_keys: Annotated[list[str], NoDecode] = Field(default_factory=list)
     query_instruction: str = "Given a user query, retrieve relevant passages that answer the query."
 
     @field_validator("vllm_base_url")
@@ -38,4 +43,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

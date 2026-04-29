@@ -31,6 +31,8 @@ bash scripts/start.sh
 
 The combined script starts vLLM first, waits for `http://127.0.0.1:8101/v1/models`, then starts the gateway on port `8000`.
 
+`scripts/start.sh` automatically loads `.env` from the project root when the file exists. Already exported shell variables override script defaults through normal shell behavior.
+
 Useful overrides:
 
 ```bash
