@@ -10,8 +10,8 @@ GPU_ID="${CUDA_VISIBLE_DEVICES:-0}"
 export CUDA_VISIBLE_DEVICES="${GPU_ID}"
 
 exec vllm serve "${MODEL_PATH}" \
-  --task embed \
+  --runner pooling \
+  --convert embed \
   --served-model-name "${MODEL_NAME}" \
   --host "${HOST}" \
   --port "${PORT}"
-

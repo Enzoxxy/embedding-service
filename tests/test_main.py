@@ -55,7 +55,7 @@ def test_models() -> None:
     assert response.json()["data"][0]["id"] == "qwen3-embedding-8b"
 
 
-def test_embeddings_success_defaults_to_4096_dimensions() -> None:
+def test_embeddings_success_does_not_forward_default_dimensions() -> None:
     with make_test_client() as (client, fake):
         response = client.post(
             "/v1/embeddings",
@@ -65,7 +65,18 @@ def test_embeddings_success_defaults_to_4096_dimensions() -> None:
     body = response.json()
     assert len(body["data"]) == 2
     assert len(body["data"][0]["embedding"]) == 4096
-    assert fake.last_payload.dimensions == 4096
+    assert fake.last_payload.dimensions is None
+
+
+def test_embeddings_forwards_explicit_dimensions() -> None:
+    with make_test_client() as (client, fake):
+        response = client.post(
+            "/v1/embeddings",
+            json={"model": "qwen3-embedding-8b", "input": "a", "dimensions": 1024},
+        )
+    assert response.status_code == 200
+    assert len(response.json()["data"][0]["embedding"]) == 1024
+    assert fake.last_payload.dimensions == 1024
 
 
 def test_embeddings_rejects_wrong_model() -> None:

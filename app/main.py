@@ -136,8 +136,6 @@ async def embeddings(
                 status_code=400,
                 detail=f"input item count exceeds max_input_items={settings.max_input_items}",
             )
-        if embedding_request.dimensions is None:
-            embedding_request = embedding_request.model_copy(update={"dimensions": settings.embedding_dim})
         embedding_request = apply_instruction_if_needed(
             embedding_request,
             settings,
@@ -173,4 +171,3 @@ def _public_status_code(status_code: int) -> int:
     if 500 <= status_code:
         return 502
     return status_code
-

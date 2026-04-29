@@ -31,7 +31,8 @@ The script uses:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 vllm serve models/Qwen3-Embedding-8B \
-  --task embed \
+  --runner pooling \
+  --convert embed \
   --served-model-name qwen3-embedding-8b \
   --host 0.0.0.0 \
   --port 8101
