@@ -65,6 +65,14 @@ pip install -e ".[test,examples]"
 
 vLLM 需要根据目标 GPU 服务器的 CUDA/PyTorch 环境单独安装。
 
+首次启动前创建本地配置文件：
+
+```bash
+cp .env.example .env
+```
+
+按实际模型和服务器环境修改 `.env`。所有 shell 启动脚本都会读取该文件，模型路径、模型名、GPU、vLLM 端口和 gateway 端口都不再在脚本内声明默认值。
+
 ## 启动命令
 
 ### 方案一：宿主机一键启动 vLLM + gateway
@@ -75,18 +83,18 @@ vLLM 需要根据目标 GPU 服务器的 CUDA/PyTorch 环境单独安装。
 bash scripts/start.sh
 ```
 
-常用覆盖参数：
+常用配置项在 `.env` 中调整：
 
-```bash
-MODEL_PATH=/path/to/embedding-model \
-MODEL_NAME=my-embedding-model \
-EMBEDDING_DIM=1024 \
-VLLM_MAX_MODEL_LEN=8192 \
-VLLM_GPU_MEMORY_UTILIZATION=0.90 \
-bash scripts/start.sh
+```dotenv
+MODEL_PATH=/path/to/embedding-model
+MODEL_NAME=my-embedding-model
+EMBEDDING_DIM=1024
+CUDA_VISIBLE_DEVICES=0
+VLLM_MAX_MODEL_LEN=8192
+VLLM_GPU_MEMORY_UTILIZATION=0.90
 ```
 
-`scripts/start.sh` 会自动读取项目根目录下的 `.env`。已经在 shell 中导出的环境变量优先级更高。
+默认读取项目根目录下的 `.env`。如需使用其他配置文件，可以设置 `ENV_FILE=/path/to/envfile`。
 
 ### 方案二：宿主机启动 vLLM + Docker Compose 启动 gateway
 
@@ -114,13 +122,15 @@ docker compose -f deploy/docker-compose.yml --profile qdrant up
 
 ## 服务与 API 连接说明矩阵
 
-| 服务/组件 | 默认地址 | 启动方式 | 调用方 | 主要用途 | 备注 |
-| --- | --- | --- | --- | --- | --- |
-| FastAPI gateway | `http://0.0.0.0:8000` | `scripts/start.sh` 或 `docker compose ... up gateway` | 外部客户端、验收脚本、Qdrant 示例 | 对外提供 embedding API、模型列表、健康检查和 metrics | 实际业务调用入口 |
-| vLLM backend | `http://127.0.0.1:8101/v1` | `scripts/start.sh` 或 `scripts/start_vllm.sh` | FastAPI gateway | 加载本地 embedding 模型并生成向量 | 不建议直接暴露给外网 |
-| Qdrant | `http://127.0.0.1:6333` | `docker compose --profile qdrant up` | `examples/qdrant_demo.py` 或业务系统 | 向量存储和相似度检索 | 可选组件，不是 gateway 必需依赖 |
-| Prometheus metrics | `http://<gateway>:8000/metrics` | 随 gateway 启动 | Prometheus 或监控系统 | 暴露请求量、延迟、输入条数和后端错误指标 | 无鉴权逻辑 |
-| 验收脚本 | 连接 `GATEWAY_BASE_URL`，默认 `http://127.0.0.1:8000` | `python scripts/acceptance_smoke.py` | 运维/部署人员 | 检查健康、就绪、单条 embedding、批量 embedding、query instruction | 输出到 `reports/acceptance/` |
+
+| 服务/组件              | 默认地址                                             | 启动方式                                                 | 调用方                             | 主要用途                                                | 备注                        |
+| ------------------ | ------------------------------------------------ | ---------------------------------------------------- | ------------------------------- | --------------------------------------------------- | ------------------------- |
+| FastAPI gateway    | `http://0.0.0.0:8000`                            | `scripts/start.sh` 或 `docker compose ... up gateway` | 外部客户端、验收脚本、Qdrant 示例            | 对外提供 embedding API、模型列表、健康检查和 metrics               | 实际业务调用入口                  |
+| vLLM backend       | `http://127.0.0.1:8101/v1`                       | `scripts/start.sh` 或 `scripts/start_vllm.sh`         | FastAPI gateway                 | 加载本地 embedding 模型并生成向量                              | 不建议直接暴露给外网                |
+| Qdrant             | `http://127.0.0.1:6333`                          | `docker compose --profile qdrant up`                 | `examples/qdrant_demo.py` 或业务系统 | 向量存储和相似度检索                                          | 可选组件，不是 gateway 必需依赖      |
+| Prometheus metrics | `http://<gateway>:8000/metrics`                  | 随 gateway 启动                                         | Prometheus 或监控系统                | 暴露请求量、延迟、输入条数和后端错误指标                                | 无鉴权逻辑                     |
+| 验收脚本               | 连接 `GATEWAY_BASE_URL`，默认 `http://127.0.0.1:8000` | `python scripts/acceptance_smoke.py`                 | 运维/部署人员                         | 检查健康、就绪、单条 embedding、批量 embedding、query instruction | 输出到 `reports/acceptance/` |
+
 
 ## 对外 API
 
@@ -244,17 +254,29 @@ curl http://127.0.0.1:8000/v1/embeddings \
 
 ## 关键环境变量
 
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `MODEL_NAME` | `qwen3-embedding-8b` | gateway 对外声明的模型名，同时传给 vLLM served model name；替换模型时需要同步调整 |
-| `MODEL_PATH` | `models/Qwen3-Embedding-8B` | 本地模型路径；替换模型时指向新的模型目录 |
-| `VLLM_BASE_URL` | `http://127.0.0.1:8101/v1` | gateway 访问 vLLM 的 OpenAI-compatible API 地址 |
-| `EMBEDDING_DIM` | `4096` | 预期向量维度，主要用于验收和示例；替换模型时应改成新模型的实际输出维度 |
-| `MAX_INPUT_ITEMS` | `256` | 单次 embedding 请求最多输入条数 |
-| `REQUEST_TIMEOUT_SECONDS` | `120` | gateway 访问 vLLM 的请求超时时间 |
-| `RETRY_ATTEMPTS` | `2` | gateway 访问 vLLM 的重试次数 |
-| `API_KEYS` | 空 | 逗号分隔的 API key 列表 |
-| `QUERY_INSTRUCTION` | `Given a user query, retrieve relevant passages that answer the query.` | query instruction 模式使用的提示词；可按模型建议或业务场景调整 |
+
+| 变量                             | 默认值                                                                     | 说明                                                       |
+| ------------------------------ | ----------------------------------------------------------------------- | -------------------------------------------------------- |
+| `MODEL_NAME`                   | `qwen3-embedding-8b`                                                    | gateway 对外声明的模型名，同时传给 vLLM served model name；替换模型时需要同步调整 |
+| `MODEL_PATH`                   | `models/Qwen3-Embedding-8B`                                             | 本地模型路径；替换模型时指向新的模型目录                                     |
+| `CUDA_VISIBLE_DEVICES`         | `0`                                                                     | vLLM 使用的 GPU ID                                          |
+| `VLLM_HOST`                    | `0.0.0.0`                                                               | vLLM 监听地址                                                |
+| `VLLM_PORT`                    | `8101`                                                                  | vLLM 监听端口                                                |
+| `VLLM_BASE_URL`                | `http://127.0.0.1:8101/v1`                                              | gateway 访问 vLLM 的 OpenAI-compatible API 地址               |
+| `VLLM_DTYPE`                   | `float16`                                                               | `scripts/start.sh` 启动 vLLM 时传入的 dtype                    |
+| `VLLM_MAX_MODEL_LEN`           | `8192`                                                                  | `scripts/start.sh` 启动 vLLM 时传入的最大上下文长度                   |
+| `VLLM_GPU_MEMORY_UTILIZATION`  | `0.90`                                                                  | `scripts/start.sh` 启动 vLLM 时传入的显存利用率                     |
+| `VLLM_STARTUP_TIMEOUT_SECONDS` | `600`                                                                   | `scripts/start.sh` 等待 vLLM 就绪的超时时间                       |
+| `GATEWAY_HOST`                 | `0.0.0.0`                                                               | gateway 监听地址                                             |
+| `GATEWAY_PORT`                 | `8000`                                                                  | gateway 监听端口                                             |
+| `GATEWAY_APP`                  | `app.main:app`                                                          | uvicorn 启动的 ASGI 应用                                      |
+| `EMBEDDING_DIM`                | `4096`                                                                  | 预期向量维度，主要用于验收和示例；替换模型时应改成新模型的实际输出维度                      |
+| `MAX_INPUT_ITEMS`              | `256`                                                                   | 单次 embedding 请求最多输入条数                                    |
+| `REQUEST_TIMEOUT_SECONDS`      | `120`                                                                   | gateway 访问 vLLM 的请求超时时间                                  |
+| `RETRY_ATTEMPTS`               | `2`                                                                     | gateway 访问 vLLM 的重试次数                                    |
+| `API_KEYS`                     | 空                                                                       | 逗号分隔的 API key 列表                                         |
+| `QUERY_INSTRUCTION`            | `Given a user query, retrieve relevant passages that answer the query.` | query instruction 模式使用的提示词；可按模型建议或业务场景调整                 |
+
 
 ## Qdrant 示例
 

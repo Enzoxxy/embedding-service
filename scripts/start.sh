@@ -5,29 +5,41 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${ENV_FILE:-${PROJECT_ROOT}/.env}"
 
-if [[ -f "${ENV_FILE}" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "${ENV_FILE}"
-  set +a
+if [[ ! -f "${ENV_FILE}" ]]; then
+  echo "Missing env file: ${ENV_FILE}" >&2
+  echo "Create it from .env.example and adjust model/runtime settings before starting." >&2
+  exit 1
 fi
 
-MODEL_PATH="${MODEL_PATH:-models/Qwen3-Embedding-8B}"
-MODEL_NAME="${MODEL_NAME:-qwen3-embedding-8b}"
-GPU_ID="${CUDA_VISIBLE_DEVICES:-0}"
+set -a
+# shellcheck disable=SC1090
+source "${ENV_FILE}"
+set +a
 
-VLLM_HOST="${VLLM_HOST:-0.0.0.0}"
-VLLM_PORT="${VLLM_PORT:-8101}"
-VLLM_CONNECT_HOST="${VLLM_CONNECT_HOST:-127.0.0.1}"
-VLLM_BASE_URL="${VLLM_BASE_URL:-http://${VLLM_CONNECT_HOST}:${VLLM_PORT}/v1}"
-VLLM_DTYPE="${VLLM_DTYPE:-float16}"
-VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-8192}"
-VLLM_GPU_MEMORY_UTILIZATION="${VLLM_GPU_MEMORY_UTILIZATION:-0.90}"
-VLLM_STARTUP_TIMEOUT_SECONDS="${VLLM_STARTUP_TIMEOUT_SECONDS:-600}"
+require_env() {
+  local name
+  for name in "$@"; do
+    if [[ -z "${!name:-}" ]]; then
+      echo "Missing required env var: ${name}" >&2
+      exit 1
+    fi
+  done
+}
 
-GATEWAY_HOST="${GATEWAY_HOST:-0.0.0.0}"
-GATEWAY_PORT="${GATEWAY_PORT:-8000}"
-GATEWAY_APP="${GATEWAY_APP:-app.main:app}"
+require_env \
+  MODEL_PATH \
+  MODEL_NAME \
+  CUDA_VISIBLE_DEVICES \
+  VLLM_HOST \
+  VLLM_PORT \
+  VLLM_BASE_URL \
+  VLLM_DTYPE \
+  VLLM_MAX_MODEL_LEN \
+  VLLM_GPU_MEMORY_UTILIZATION \
+  VLLM_STARTUP_TIMEOUT_SECONDS \
+  GATEWAY_HOST \
+  GATEWAY_PORT \
+  GATEWAY_APP
 
 VLLM_PID=""
 GATEWAY_PID=""
@@ -48,7 +60,6 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
-export CUDA_VISIBLE_DEVICES="${GPU_ID}"
 export MODEL_NAME
 export MODEL_PATH
 export VLLM_BASE_URL
