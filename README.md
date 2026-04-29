@@ -21,7 +21,26 @@ pip install -e ".[test,examples]"
 
 Install vLLM separately on the target GPU server according to its CUDA/PyTorch environment.
 
-## Start vLLM
+## Start Service
+
+Start vLLM and the gateway together:
+
+```bash
+bash scripts/start.sh
+```
+
+The combined script starts vLLM first, waits for `http://127.0.0.1:8101/v1/models`, then starts the gateway on port `8000`.
+
+Useful overrides:
+
+```bash
+MODEL_PATH=../models/Qwen3-Embedding-8B \
+VLLM_MAX_MODEL_LEN=8192 \
+VLLM_GPU_MEMORY_UTILIZATION=0.90 \
+bash scripts/start.sh
+```
+
+## Start vLLM Only
 
 ```bash
 bash scripts/start_vllm.sh
