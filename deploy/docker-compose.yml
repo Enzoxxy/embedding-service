@@ -1,33 +1,71 @@
 services:
-  gateway:
-    image: python:3.11-slim
-    working_dir: /srv
-    command: >
-      sh -c "pip install -e . &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+  vllm:
+    image: vllm/vllm-openai:latest
+    runtime: nvidia
+    ipc: host
     ports:
-      - "8000:8000"
-    environment:
-      MODEL_NAME: qwen3-embedding-8b
-      MODEL_PATH: models/Qwen3-Embedding-8B
-      VLLM_BASE_URL: http://host.docker.internal:8101/v1
-      EMBEDDING_DIM: "4096"
-      MAX_INPUT_ITEMS: "256"
-      REQUEST_TIMEOUT_SECONDS: "120"
+      - "${VLLM_PORT:-8101}:8101"
     volumes:
-      - ..:/srv
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - ${MODEL_PATH:-./../models}:/models
+    environment:
+      NVIDIA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-all}
+      HF_HUB_OFFLINE: "1"
+    command: >
+      --model /models/${MODEL_DIR_NAME:-Qwen3-Embedding-8B}
+      --runner pooling
+      --convert embed
+      --served-model-name ${MODEL_NAME:-qwen3-embedding-8b}
+      --host 0.0.0.0
+      --port 8101
+      --dtype ${VLLM_DTYPE:-float16}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-8192}
+      --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.90}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8101/v1/models || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 120s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: gateway
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    environment:
+      MODEL_NAME: ${MODEL_NAME:-qwen3-embedding-8b}
+      MODEL_PATH: /models/${MODEL_DIR_NAME:-Qwen3-Embedding-8B}
+      VLLM_BASE_URL: http://vllm:8101/v1
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-4096}
+      MAX_INPUT_ITEMS: ${MAX_INPUT_ITEMS:-256}
+      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-120}
+      RETRY_ATTEMPTS: ${RETRY_ATTEMPTS:-2}
+      API_KEYS: ${API_KEYS:-}
+      QUERY_INSTRUCTION: ${QUERY_INSTRUCTION:-}
+    depends_on:
+      vllm:
+        condition: service_healthy
+    restart: unless-stopped
 
   qdrant:
     image: qdrant/qdrant:v1.11.3
     profiles: ["qdrant"]
     ports:
-      - "6333:6333"
+      - "${QDRANT_PORT:-6333}:6333"
       - "6334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
 
 volumes:
   qdrant_storage:
-
